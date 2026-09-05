@@ -3,6 +3,8 @@ import hashlib
 import pymupdf  # PyMuPDF for PDFs
 import docx
 import requests
+import chromadb
+from chromadb.errors import InvalidArgumentError
 
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
@@ -82,6 +84,7 @@ def process_document(file_path):
 
     return texts
 
+
 def store_embeddings(texts, source_path, db_path="chroma_db"):
     """Replace stored chunks for a source document with its current contents."""
     vectorstore = Chroma(collection_name="documents", persist_directory=db_path, embedding_function=embedding_model)
@@ -105,7 +108,6 @@ def store_embeddings(texts, source_path, db_path="chroma_db"):
         vectorstore.add_texts(texts, metadatas=metadatas, ids=document_ids)
     
     print("✅ Embeddings stored successfully!")
-
 
 def search_documents(query, db_path="chroma_db"):
     """Search stored embeddings in ChromaDB"""
