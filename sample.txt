@@ -1,0 +1,5 @@
+My name is Bharath and I am an AI application developer.
+
+I have 9 years of experience in development
+
+My skills are AI, Langchain, LangGraph, Python, Node.js, Power automate, Azure and GCP functions.
