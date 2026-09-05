@@ -101,7 +101,7 @@ Use one loader at a time for a given document workflow.
 
 | Loader | Embedding method | Internet needed at runtime | Database directory | Duplicate handling |
 | --- | --- | --- | --- | --- |
-| `document_loader.py` | Hugging Face `all-mpnet-base-v2` semantic embeddings | Yes, only if the model is not already cached | `chroma_db` | Appends chunks on every run |
+| `document_loader.py` | Hugging Face `all-mpnet-base-v2` semantic embeddings | Yes, only if the model is not already cached | `chroma_db` | Replaces previous chunks from the selected source |
 | `document_loader_offline.py` | 384-dimension local feature-hashing embeddings | No | `chroma_db_offline` | Replaces previous chunks from the selected source |
 
 Do not point both loaders at the same Chroma directory. The semantic loader produces 768-dimension vectors, while the offline loader produces 384-dimension vectors. Chroma collections cannot mix vector dimensions.
@@ -133,7 +133,7 @@ On the semantic loader's first run, Hugging Face downloads `sentence-transformer
 
 ## Reset Indexed Data
 
-The semantic loader persists data under `chroma_db` and appends the selected document's chunks on each run. Reset it before re-indexing a document to avoid duplicate chunks.
+The semantic loader persists data under `chroma_db`. It uses stable IDs and source metadata, replacing old chunks from the selected document rather than creating duplicates.
 
 The offline loader persists data under `chroma_db_offline`. It uses stable IDs and source metadata, replacing old chunks from the selected document rather than creating duplicates.
 
