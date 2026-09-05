@@ -1,4 +1,5 @@
 import os
+import hashlib
 import pymupdf  # PyMuPDF for PDFs
 import docx
 import requests
@@ -81,12 +82,30 @@ def process_document(file_path):
 
     return texts
 
-def store_embeddings(texts, db_path="chroma_db"):
-    """Store text embeddings in ChromaDB"""
+def store_embeddings(texts, source_path, db_path="chroma_db"):
+    """Replace stored chunks for a source document with its current contents."""
     vectorstore = Chroma(collection_name="documents", persist_directory=db_path, embedding_function=embedding_model)
-    vectorstore.add_texts(texts)
+    source_id = os.path.abspath(source_path)
+    document_ids = [
+        hashlib.sha256(f"{source_id}:{index}:{text}".encode("utf-8")).hexdigest()
+        for index, text in enumerate(texts)
+    ]
+    metadatas = [{"source": source_id} for _ in texts]
+
+    try:
+        vectorstore.delete(where={"source": source_id})
+        vectorstore.add_texts(texts, metadatas=metadatas, ids=document_ids)
+    except InvalidArgumentError as error:
+        if "expecting embedding with dimension" not in str(error):
+            raise
+
+        print("Existing embeddings use a different dimension. Rebuilding the collection.")
+        chromadb.PersistentClient(path=db_path).delete_collection("documents")
+        vectorstore = Chroma(collection_name="documents", persist_directory=db_path, embedding_function=embedding_model)
+        vectorstore.add_texts(texts, metadatas=metadatas, ids=document_ids)
     
     print("✅ Embeddings stored successfully!")
+
 
 def search_documents(query, db_path="chroma_db"):
     """Search stored embeddings in ChromaDB"""
@@ -148,7 +167,7 @@ if __name__ == "__main__":
     sample_file = "sample.docx"
     texts = process_document(sample_file)
     if texts:
-        store_embeddings(texts)
+        store_embeddings(texts, sample_file)
 
     user_query = input("Enter your search query: ")
     results = search_documents(user_query)
