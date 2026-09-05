@@ -1,11 +1,15 @@
 import os
+import hashlib
+import math
+import re
 import pymupdf  # PyMuPDF for PDFs
 import docx
 import requests
+import chromadb
+from chromadb.errors import InvalidArgumentError
 
 OLLAMA_API_URL = "http://localhost:11434/api/generate"
 
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -64,8 +68,31 @@ def search_and_generate_response(query, db_path="chroma_db"):
     print(ai_response)
 
 
-# Load the embeddings model
-embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+class LocalHashEmbeddings:
+    """Deterministic local embeddings that do not require a model download."""
+
+    def __init__(self, dimensions=384):
+        self.dimensions = dimensions
+
+    def _embed(self, text):
+        vector = [0.0] * self.dimensions
+        for token in re.findall(r"\w+", text.lower()):
+            digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+            value = int.from_bytes(digest, byteorder="big")
+            index = value % self.dimensions
+            vector[index] += 1.0 if value & 1 else -1.0
+
+        magnitude = math.sqrt(sum(component * component for component in vector))
+        return [component / magnitude for component in vector] if magnitude else vector
+
+    def embed_documents(self, texts):
+        return [self._embed(text) for text in texts]
+
+    def embed_query(self, text):
+        return self._embed(text)
+
+
+embedding_model = LocalHashEmbeddings()
 
 
 def process_document(file_path):
@@ -84,7 +111,16 @@ def process_document(file_path):
 def store_embeddings(texts, db_path="chroma_db"):
     """Store text embeddings in ChromaDB"""
     vectorstore = Chroma(collection_name="documents", persist_directory=db_path, embedding_function=embedding_model)
-    vectorstore.add_texts(texts)
+    try:
+        vectorstore.add_texts(texts)
+    except InvalidArgumentError as error:
+        if "expecting embedding with dimension" not in str(error):
+            raise
+
+        print("Existing embeddings use a different dimension. Rebuilding the collection.")
+        chromadb.PersistentClient(path=db_path).delete_collection("documents")
+        vectorstore = Chroma(collection_name="documents", persist_directory=db_path, embedding_function=embedding_model)
+        vectorstore.add_texts(texts)
     
     print("✅ Embeddings stored successfully!")
 

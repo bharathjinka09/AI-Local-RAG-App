@@ -1,15 +1,14 @@
 # Local Qwen Document Search
 
-A small local retrieval-augmented generation (RAG) prototype. It extracts text from a PDF, Word document, or text file, creates embeddings with Hugging Face, stores them in ChromaDB, and uses a local Ollama Qwen model to answer questions about the document.
+A small local retrieval-augmented generation (RAG) prototype. It extracts text from a PDF, Word document, or text file, creates deterministic local embeddings, stores them in ChromaDB, and uses a local Ollama Qwen model to answer questions about the document.
 
 ## What You Need
 
 - Windows PowerShell
 - Python 3.10 or later
 - [Ollama](https://ollama.com/) installed and available on your `PATH`
-- Internet access for the first download of the Hugging Face embedding model
 
-The project has no API keys or cloud services. The language model runs locally through Ollama.
+The project has no API keys, cloud services, or Hugging Face downloads. After the Ollama model and Python dependencies have been installed locally, indexing and querying work without internet access.
 
 ## Clone the Repository
 
@@ -44,7 +43,7 @@ The dependency file is UTF-16 encoded. `pip` may not reliably read that encoding
 Get-Content .\requirements.txt -Encoding Unicode | python -m pip install -r -
 ```
 
-This installs ChromaDB, LangChain, Hugging Face embedding support, PyMuPDF, `python-docx`, and their pinned dependencies.
+This installs ChromaDB, LangChain, Ollama integration, PyMuPDF, `python-docx`, and their pinned dependencies. Install dependencies while connected to the internet, then the application can run offline.
 
 ## Install and Prepare Ollama
 
@@ -61,7 +60,7 @@ This installs ChromaDB, LangChain, Hugging Face embedding support, PyMuPDF, `pyt
    ollama run qwen2.5:latest "What is AI?"
    ```
 
-Ollama normally starts its local API automatically at `http://localhost:11434`. Keep Ollama running while using the scripts.
+Ollama normally starts its local API at `http://localhost:11434`. It is only used to generate answers. Document embeddings are calculated directly in Python and do not call Ollama or Hugging Face.
 
 ## Verify Ollama Access
 
@@ -103,16 +102,16 @@ The script performs these steps:
 
 1. Extracts text from the selected document.
 2. Splits the text into 500-character chunks with a 50-character overlap.
-3. Downloads `sentence-transformers/all-mpnet-base-v2` on the first run, then creates embeddings.
+3. Creates deterministic local embeddings without downloading or calling Hugging Face or Ollama.
 4. Stores embeddings in the `documents` collection under `chroma_db`.
 5. Prompts for a search query.
 6. Prints the three closest text chunks and two locally generated answers.
 
-The first run can take a while because the embedding model must be downloaded. Later runs reuse its local Hugging Face cache.
+The first run can take a little longer while Ollama loads the local Qwen model into memory. It does not need internet access.
 
 ## Reset Indexed Data
 
-The Chroma database persists under `chroma_db`. Each script run adds the selected document's chunks to the existing `documents` collection.
+The Chroma database persists under `chroma_db`. Each script run adds the selected document's chunks to the existing `documents` collection. If the collection contains vectors created by a previous embedding implementation, the script detects the incompatible dimension, rebuilds the `documents` collection, and indexes the selected document automatically.
 
 To start with an empty index, stop the script and delete the database directory:
 
@@ -145,7 +144,11 @@ ollama --version
 
 ### Connection refused at port 11434
 
-Start Ollama, or run `ollama serve` in a separate terminal, then rerun the Python command.
+Start Ollama in a separate terminal, then rerun the Python command:
+
+```powershell
+ollama serve
+```
 
 ### `model 'qwen2.5:latest' not found`
 
