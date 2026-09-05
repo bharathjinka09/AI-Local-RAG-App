@@ -1,6 +1,11 @@
 # Local Qwen Document Search
 
-A small local retrieval-augmented generation (RAG) prototype. It extracts text from a PDF, Word document, or text file, creates deterministic local embeddings, stores them in ChromaDB, and uses a local Ollama Qwen model to answer questions about the document.
+A small retrieval-augmented generation (RAG) prototype. It extracts text from a PDF, Word document, or text file, stores embeddings in ChromaDB, and uses a local Ollama Qwen model to answer questions about the document.
+
+Two loader implementations are available:
+
+- `document_loader.py` creates semantic embeddings with Hugging Face's `sentence-transformers/all-mpnet-base-v2`. This is the recommended option when internet access or a pre-populated Hugging Face cache is available.
+- `document_loader_offline.py` creates deterministic local hash embeddings in Python. It works without internet access or Ollama embedding support, but retrieval is based primarily on matching words rather than semantic meaning.
 
 ## What You Need
 
@@ -8,7 +13,7 @@ A small local retrieval-augmented generation (RAG) prototype. It extracts text f
 - Python 3.10 or later
 - [Ollama](https://ollama.com/) installed and available on your `PATH`
 
-The project has no API keys, cloud services, or Hugging Face downloads. After the Ollama model and Python dependencies have been installed locally, indexing and querying work without internet access.
+The language model runs locally through Ollama. The semantic loader downloads its embedding model from Hugging Face on its first run; the offline loader has no runtime network dependency for embeddings.
 
 ## Clone the Repository
 
@@ -43,7 +48,7 @@ The dependency file is UTF-16 encoded. `pip` may not reliably read that encoding
 Get-Content .\requirements.txt -Encoding Unicode | python -m pip install -r -
 ```
 
-This installs ChromaDB, LangChain, Ollama integration, PyMuPDF, `python-docx`, and their pinned dependencies. Install dependencies while connected to the internet, then the application can run offline.
+This installs ChromaDB, LangChain, Hugging Face embedding support, PyMuPDF, `python-docx`, and their pinned dependencies. Downloading and installing dependencies requires internet access unless packages are already available locally.
 
 ## Install and Prepare Ollama
 
@@ -60,7 +65,7 @@ This installs ChromaDB, LangChain, Ollama integration, PyMuPDF, `python-docx`, a
    ollama run qwen2.5:latest "What is AI?"
    ```
 
-Ollama normally starts its local API at `http://localhost:11434`. It is only used to generate answers. Document embeddings are calculated directly in Python and do not call Ollama or Hugging Face.
+Ollama normally starts its local API automatically at `http://localhost:11434`. Keep Ollama running while using the scripts.
 
 ## Verify Ollama Access
 
@@ -90,6 +95,17 @@ sample_file = "sample.txt"
 
 Use a relative file name for a document in the repository root, or provide a relative/absolute path to another supported document.
 
+## Choose a Loader
+
+Use one loader at a time for a given document workflow.
+
+| Loader | Embedding method | Internet needed at runtime | Database directory | Duplicate handling |
+| --- | --- | --- | --- | --- |
+| `document_loader.py` | Hugging Face `all-mpnet-base-v2` semantic embeddings | Yes, only if the model is not already cached | `chroma_db` | Appends chunks on every run |
+| `document_loader_offline.py` | 384-dimension local feature-hashing embeddings | No | `chroma_db_offline` | Replaces previous chunks from the selected source |
+
+Do not point both loaders at the same Chroma directory. The semantic loader produces 768-dimension vectors, while the offline loader produces 384-dimension vectors. Chroma collections cannot mix vector dimensions.
+
 ## Index and Query a Document
 
 With the virtual environment active and Ollama available:
@@ -98,20 +114,28 @@ With the virtual environment active and Ollama available:
 python .\document_loader.py
 ```
 
-The script performs these steps:
+To run completely offline instead:
+
+```powershell
+python .\document_loader_offline.py
+```
+
+Both scripts perform these steps:
 
 1. Extracts text from the selected document.
 2. Splits the text into 500-character chunks with a 50-character overlap.
-3. Creates deterministic local embeddings without downloading or calling Hugging Face or Ollama.
-4. Stores embeddings in the `documents` collection under `chroma_db`.
+3. Creates embeddings using the selected loader's method.
+4. Stores embeddings in the `documents` collection under that loader's database directory.
 5. Prompts for a search query.
 6. Prints the three closest text chunks and two locally generated answers.
 
-The first run can take a little longer while Ollama loads the local Qwen model into memory. It does not need internet access.
+On the semantic loader's first run, Hugging Face downloads `sentence-transformers/all-mpnet-base-v2`; later runs use the local Hugging Face cache. The offline loader does not download an embedding model.
 
 ## Reset Indexed Data
 
-The Chroma database persists under `chroma_db`. Each script run adds the selected document's chunks to the existing `documents` collection. If the collection contains vectors created by a previous embedding implementation, the script detects the incompatible dimension, rebuilds the `documents` collection, and indexes the selected document automatically.
+The semantic loader persists data under `chroma_db` and appends the selected document's chunks on each run. Reset it before re-indexing a document to avoid duplicate chunks.
+
+The offline loader persists data under `chroma_db_offline`. It uses stable IDs and source metadata, replacing old chunks from the selected document rather than creating duplicates.
 
 To start with an empty index, stop the script and delete the database directory:
 
@@ -119,18 +143,26 @@ To start with an empty index, stop the script and delete the database directory:
 Remove-Item -Recurse -Force .\chroma_db
 ```
 
-Run `python .\document_loader.py` again to create a new database from the selected source document.
+For the offline loader, reset its separate database with:
+
+```powershell
+Remove-Item -Recurse -Force .\chroma_db_offline
+```
+
+Run the relevant loader again to create a new database from the selected source document.
 
 ## Project Files
 
 | File | Purpose |
 | --- | --- |
-| `document_loader.py` | Extracts documents, embeds text, stores it in ChromaDB, and answers questions using Qwen. |
+| `document_loader.py` | Semantic RAG loader using the Hugging Face `all-mpnet-base-v2` embedding model. |
+| `document_loader_offline.py` | Fully offline RAG loader using deterministic local feature-hashing embeddings and duplicate-safe indexing. |
 | `test_qwen.py` | Supported smoke test for the local Ollama API. |
 | `testQwen.py` | Experimental streaming request example. |
 | `requirements.txt` | Pinned Python dependencies, encoded as UTF-16. |
 | `sample.pdf`, `sample.docx`, `sample.txt` | Sample documents for testing. |
-| `chroma_db/` | Locally generated persistent vector database; safe to delete to reset indexed data. |
+| `chroma_db/` | Persistent vector database for the semantic loader; safe to delete to reset indexed data. |
+| `chroma_db_offline/` | Persistent vector database for the offline loader; safe to delete to reset indexed data. |
 
 ## Troubleshooting
 
@@ -144,11 +176,15 @@ ollama --version
 
 ### Connection refused at port 11434
 
-Start Ollama in a separate terminal, then rerun the Python command:
+Start Ollama, or run `ollama serve` in a separate terminal, then rerun the Python command.
 
-```powershell
-ollama serve
-```
+### Hugging Face asks for a token or fails without internet
+
+Use `document_loader_offline.py`. It does not download or call a Hugging Face embedding model. Alternatively, run the semantic loader once while connected to allow `all-mpnet-base-v2` to be cached locally.
+
+### `Collection expecting embedding with dimension ...`
+
+Reset the database used by the active loader. This occurs when a Chroma directory contains vectors created by another embedding implementation.
 
 ### `model 'qwen2.5:latest' not found`
 
