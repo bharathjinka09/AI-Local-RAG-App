@@ -2,6 +2,8 @@
 
 A small retrieval-augmented generation (RAG) prototype. It extracts text from a PDF, Word document, or text file, stores embeddings in ChromaDB, and uses a local Ollama Qwen model to answer questions about the document.
 
+![AI-Powered Knowledge Assistant](app-screenshot.png)
+
 Two loader implementations are available:
 
 - `document_loader.py` creates semantic embeddings with Hugging Face's `sentence-transformers/all-mpnet-base-v2`. This is the recommended option when internet access or a pre-populated Hugging Face cache is available.
