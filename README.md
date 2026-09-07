@@ -1,4 +1,4 @@
-# Local Qwen Document Search
+# Local RAG Qwen Document Search
 
 A small retrieval-augmented generation (RAG) prototype. It extracts text from a PDF, Word document, or text file, stores embeddings in ChromaDB, and uses a local Ollama Qwen model to answer questions about the document.
 
