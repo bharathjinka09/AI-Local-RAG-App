@@ -92,8 +92,17 @@ The service listens at `http://127.0.0.1:8000` by default and uses the semantic 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/` | Confirms that the API is running. |
-| `POST` | `/upload` | Saves a PDF, DOCX, or TXT document and indexes its chunks in `chroma_db`. |
+| `POST` | `/upload` | Accepts a multipart `file` field containing a PDF, DOCX, or TXT document, saves it, and indexes its chunks in `chroma_db`. |
 | `POST` | `/query` | Retrieves the three closest chunks for questions, or all chunks for summary requests, from the requested uploaded document and returns a Qwen-generated answer. |
+
+`POST /upload` returns the sanitized filename and number of indexed chunks. For example:
+
+```json
+{
+   "filename": "my-document.pdf",
+   "chunks_indexed": 12
+}
+```
 
 To send the included example request while the API is running:
 
@@ -101,7 +110,7 @@ To send the included example request while the API is running:
 python .\test_query.py
 ```
 
-The endpoint expects a JSON body with a `query` value. Include `document_filename` to restrict retrieval to an uploaded document and avoid answers based on older files in the shared collection. For example:
+The endpoint expects a JSON body with a `query` value. Include `document_filename` from the upload response to restrict retrieval to that uploaded document and avoid answers based on older files in the shared collection. Requests containing `summarize`, `summary`, or `overview` use every indexed chunk from the selected document. For example:
 
 ```json
 {
@@ -126,7 +135,7 @@ In a second terminal, start the UI:
 streamlit run .\app_ui.py
 ```
 
-Open the local URL printed by Streamlit, typically `http://localhost:8501`. Upload a `.pdf`, `.docx`, or `.txt` file from the sidebar. The UI sends it to the API, which saves it under `uploaded_files/` and indexes its contents in `chroma_db`.
+Open the local URL printed by Streamlit, typically `http://localhost:8501`. Upload a `.pdf`, `.docx`, or `.txt` file from the sidebar. The UI sends it to the API, which saves it under `uploaded_files/` and indexes its contents in the semantic `chroma_db` collection.
 
 After indexing completes, the UI shows the active filename in the sidebar. Each question is filtered to that file's chunks, so a request to summarize the document uses the current upload rather than data from previously indexed files. Summary and overview requests use all indexed chunks for the active document; other questions use the three most relevant chunks. Uploading a different file makes it the active document for later questions in that browser session.
 
@@ -206,7 +215,7 @@ Run the relevant loader again to create a new database from the selected source 
 
 | File | Purpose |
 | --- | --- |
-| `app.py` | FastAPI service that queries the semantic Chroma index and generates answers with the local Ollama Qwen model. |
+| `app.py` | FastAPI service that accepts and indexes uploaded documents in the semantic Chroma index, then generates document-scoped answers with the local Ollama Qwen model. |
 | `app_ui.py` | Streamlit web interface that uploads documents for ChromaDB indexing and sends questions to the FastAPI `/query` endpoint. |
 | `document_loader.py` | Semantic RAG loader using the Hugging Face `all-mpnet-base-v2` embedding model. |
 | `document_loader_offline.py` | Fully offline RAG loader using deterministic local feature-hashing embeddings and duplicate-safe indexing. |
