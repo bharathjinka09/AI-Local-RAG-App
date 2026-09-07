@@ -81,7 +81,7 @@ It sends `What is AI?` to `qwen2.5:latest` through Ollama and prints the respons
 
 ## Run the API
 
-After indexing a document with `document_loader.py`, start the FastAPI service in a separate PowerShell terminal:
+Start the FastAPI service in a separate PowerShell terminal:
 
 ```powershell
 uvicorn app:app --reload
@@ -92,7 +92,8 @@ The service listens at `http://127.0.0.1:8000` by default and uses the semantic 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | `GET` | `/` | Confirms that the API is running. |
-| `POST` | `/query` | Retrieves the three closest indexed chunks and returns a Qwen-generated answer. |
+| `POST` | `/upload` | Saves a PDF, DOCX, or TXT document and indexes its chunks in `chroma_db`. |
+| `POST` | `/query` | Retrieves the three closest chunks for questions, or all chunks for summary requests, from the requested uploaded document and returns a Qwen-generated answer. |
 
 To send the included example request while the API is running:
 
@@ -100,15 +101,34 @@ To send the included example request while the API is running:
 python .\test_query.py
 ```
 
-The endpoint expects a JSON body with a `query` value. For example:
+The endpoint expects a JSON body with a `query` value. Include `document_filename` to restrict retrieval to an uploaded document and avoid answers based on older files in the shared collection. For example:
 
 ```json
 {
-   "query": "What does the document say about AI?"
+   "query": "What does the document say about AI?",
+   "document_filename": "my-document.pdf"
 }
 ```
 
 Interactive API documentation is available at `http://127.0.0.1:8000/docs`.
+
+## Run the Web UI
+
+The Streamlit interface requires the FastAPI service to be running. Start the API in one terminal:
+
+```powershell
+uvicorn app:app --reload
+```
+
+In a second terminal, start the UI:
+
+```powershell
+streamlit run .\app_ui.py
+```
+
+Open the local URL printed by Streamlit, typically `http://localhost:8501`. Upload a `.pdf`, `.docx`, or `.txt` file from the sidebar. The UI sends it to the API, which saves it under `uploaded_files/` and indexes its contents in `chroma_db`.
+
+After indexing completes, the UI shows the active filename in the sidebar. Each question is filtered to that file's chunks, so a request to summarize the document uses the current upload rather than data from previously indexed files. Summary and overview requests use all indexed chunks for the active document; other questions use the three most relevant chunks. Uploading a different file makes it the active document for later questions in that browser session.
 
 ## Choose a Source Document
 
@@ -187,6 +207,7 @@ Run the relevant loader again to create a new database from the selected source 
 | File | Purpose |
 | --- | --- |
 | `app.py` | FastAPI service that queries the semantic Chroma index and generates answers with the local Ollama Qwen model. |
+| `app_ui.py` | Streamlit web interface that uploads documents for ChromaDB indexing and sends questions to the FastAPI `/query` endpoint. |
 | `document_loader.py` | Semantic RAG loader using the Hugging Face `all-mpnet-base-v2` embedding model. |
 | `document_loader_offline.py` | Fully offline RAG loader using deterministic local feature-hashing embeddings and duplicate-safe indexing. |
 | `test_qwen.py` | Supported smoke test for the local Ollama API. |
@@ -196,6 +217,7 @@ Run the relevant loader again to create a new database from the selected source 
 | `sample.pdf`, `sample.docx`, `sample.txt` | Sample documents for testing. |
 | `chroma_db/` | Persistent vector database for the semantic loader; safe to delete to reset indexed data. |
 | `chroma_db_offline/` | Persistent vector database for the offline loader; safe to delete to reset indexed data. |
+| `uploaded_files/` | Files submitted through the Streamlit upload control and indexed in the semantic ChromaDB collection. |
 
 ## Troubleshooting
 
