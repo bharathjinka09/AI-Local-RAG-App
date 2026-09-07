@@ -79,6 +79,37 @@ It sends `What is AI?` to `qwen2.5:latest` through Ollama and prints the respons
 
 `testQwen.py` is an experimental streaming variant. Its current code requests streaming output but then parses the response as one JSON object, so use `test_qwen.py` for the supported verification path.
 
+## Run the API
+
+After indexing a document with `document_loader.py`, start the FastAPI service in a separate PowerShell terminal:
+
+```powershell
+uvicorn app:app --reload
+```
+
+The service listens at `http://127.0.0.1:8000` by default and uses the semantic embeddings stored in `chroma_db`. It exposes these endpoints:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/` | Confirms that the API is running. |
+| `POST` | `/query` | Retrieves the three closest indexed chunks and returns a Qwen-generated answer. |
+
+To send the included example request while the API is running:
+
+```powershell
+python .\test_query.py
+```
+
+The endpoint expects a JSON body with a `query` value. For example:
+
+```json
+{
+   "query": "What does the document say about AI?"
+}
+```
+
+Interactive API documentation is available at `http://127.0.0.1:8000/docs`.
+
 ## Choose a Source Document
 
 `document_loader.py` supports these extensions:
@@ -155,10 +186,12 @@ Run the relevant loader again to create a new database from the selected source 
 
 | File | Purpose |
 | --- | --- |
+| `app.py` | FastAPI service that queries the semantic Chroma index and generates answers with the local Ollama Qwen model. |
 | `document_loader.py` | Semantic RAG loader using the Hugging Face `all-mpnet-base-v2` embedding model. |
 | `document_loader_offline.py` | Fully offline RAG loader using deterministic local feature-hashing embeddings and duplicate-safe indexing. |
 | `test_qwen.py` | Supported smoke test for the local Ollama API. |
 | `testQwen.py` | Experimental streaming request example. |
+| `test_query.py` | Example client that posts a document question to the local FastAPI `/query` endpoint. |
 | `requirements.txt` | Pinned Python dependencies, encoded as UTF-16. |
 | `sample.pdf`, `sample.docx`, `sample.txt` | Sample documents for testing. |
 | `chroma_db/` | Persistent vector database for the semantic loader; safe to delete to reset indexed data. |
